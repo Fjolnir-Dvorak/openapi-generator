@@ -1572,7 +1572,7 @@ public class DefaultCodegen implements CodegenConfig {
         } else if (ModelUtils.isURISchema(schema)) {
             return "URI";
         } else if (ModelUtils.isStringSchema(schema)) {
-            if(typeMapping.containsKey(schema.getFormat())) {
+            if (typeMapping.containsKey(schema.getFormat())) {
                 // If the format matches a typeMapping (supplied with the --typeMappings flag)
                 // then treat the format as a primitive type.
                 // This allows the typeMapping flag to add a new custom type which can then
@@ -1870,6 +1870,9 @@ public class DefaultCodegen implements CodegenConfig {
                 }
             }
 
+            if(composed.getRequired() != null) {
+                required.addAll(composed.getRequired());
+            }
             addVars(m, unaliasPropertySchema(properties), required, unaliasPropertySchema(allProperties), allRequired);
 
             // end of code block for composed schema
@@ -1884,19 +1887,16 @@ public class DefaultCodegen implements CodegenConfig {
             if (ModelUtils.isMapSchema(schema)) {
                 addAdditionPropertiesToCodeGenModel(m, schema);
                 m.isMapModel = true;
-            }
-            else if (ModelUtils.isIntegerSchema(schema)) { // integer type
+            } else if (ModelUtils.isIntegerSchema(schema)) { // integer type
                 m.isNumeric = Boolean.TRUE;
                 if (ModelUtils.isLongSchema(schema)) { // int64/long format
                     m.isLong = Boolean.TRUE;
                 } else { // int32 format
                     m.isInteger = Boolean.TRUE;
                 }
-            }
-            else if (ModelUtils.isStringSchema(schema)) {
+            } else if (ModelUtils.isStringSchema(schema)) {
                 m.isString = Boolean.TRUE;
-            }
-            else if (ModelUtils.isNumberSchema(schema)) {
+            } else if (ModelUtils.isNumberSchema(schema)) {
                 m.isNumeric = Boolean.TRUE;
                 if (ModelUtils.isFloatSchema(schema)) { // float
                     m.isFloat = Boolean.TRUE;
@@ -1905,6 +1905,10 @@ public class DefaultCodegen implements CodegenConfig {
                 } else { // type is number and without format
                     m.isNumber = Boolean.TRUE;
                 }
+            }
+
+            if (Boolean.TRUE.equals(schema.getNullable())) {
+                m.isNullable = Boolean.TRUE;
             }
 
             // passing null to allProperties and allRequired as there's no parent
@@ -1972,6 +1976,10 @@ public class DefaultCodegen implements CodegenConfig {
 
             for (Schema component : composedSchema.getAllOf()) {
                 addProperties(properties, required, component);
+            }
+
+            if(schema.getRequired() != null) {
+                required.addAll(schema.getRequired());
             }
 
             if (composedSchema.getOneOf() != null) {
@@ -2650,7 +2658,7 @@ public class DefaultCodegen implements CodegenConfig {
         if (requestBody != null) {
             if (getContentType(requestBody) != null &&
                     (getContentType(requestBody).toLowerCase(Locale.ROOT).startsWith("application/x-www-form-urlencoded") ||
-                    getContentType(requestBody).toLowerCase(Locale.ROOT).startsWith("multipart/form-data"))) {
+                            getContentType(requestBody).toLowerCase(Locale.ROOT).startsWith("multipart/form-data"))) {
                 // process form parameters
                 formParams = fromRequestBodyToFormParameters(requestBody, imports);
                 for (CodegenParameter cp : formParams) {
@@ -3018,7 +3026,7 @@ public class DefaultCodegen implements CodegenConfig {
         }
 
         Schema s;
-        if(parameter.getSchema() != null) {
+        if (parameter.getSchema() != null) {
             s = parameter.getSchema();
         } else if (parameter.getContent() != null) {
             Content content = parameter.getContent();
@@ -4016,6 +4024,19 @@ public class DefaultCodegen implements CodegenConfig {
      * @return sanitized string
      */
     public String sanitizeName(String name, String removeCharRegEx) {
+        return sanitizeName(name, removeCharRegEx, new ArrayList<String>());
+    }
+
+    /**
+     * Sanitize name (parameter, property, method, etc)
+     *
+     * @param name            string to be sanitize
+     * @param removeCharRegEx a regex containing all char that will be removed
+     * @param exceptionList a list of matches which should not be sanitized (i.e expections)
+     * @return sanitized string
+     */
+    @SuppressWarnings("static-method")
+    public String sanitizeName(String name, String removeCharRegEx, ArrayList<String> exceptionList) {
         // NOTE: performance wise, we should have written with 2 replaceAll to replace desired
         // character with _ or empty character. Below aims to spell out different cases we've
         // encountered so far and hopefully make it easier for others to add more special
@@ -4033,27 +4054,27 @@ public class DefaultCodegen implements CodegenConfig {
         }
 
         // input[] => input
-        name = name.replaceAll("\\[\\]", ""); // FIXME: a parameter should not be assigned. Also declare the methods parameters as 'final'.
+        name = this.sanitizeValue(name, "\\[\\]", "", exceptionList);
 
         // input[a][b] => input_a_b
-        name = name.replaceAll("\\[", "_");
-        name = name.replaceAll("\\]", "");
+        name = this.sanitizeValue(name, "\\[", "_", exceptionList);
+        name = this.sanitizeValue(name, "\\]", "", exceptionList);
 
         // input(a)(b) => input_a_b
-        name = name.replaceAll("\\(", "_");
-        name = name.replaceAll("\\)", "");
+        name = this.sanitizeValue(name, "\\(", "_", exceptionList);
+        name = this.sanitizeValue(name, "\\)", "", exceptionList);
 
         // input.name => input_name
-        name = name.replaceAll("\\.", "_");
+        name = this.sanitizeValue(name, "\\.", "_", exceptionList);
 
         // input-name => input_name
-        name = name.replaceAll("-", "_");
+        name = this.sanitizeValue(name, "-", "_", exceptionList);
 
         // a|b => a_b
-        name = name.replace("|", "_");
+        name = this.sanitizeValue(name, "\\|", "_", exceptionList);
 
         // input name and age => input_name_and_age
-        name = name.replaceAll(" ", "_");
+        name = this.sanitizeValue(name, " ", "_", exceptionList);
 
         // /api/films/get => _api_films_get
         // \api\films\get => _api_films_get
@@ -4069,6 +4090,13 @@ public class DefaultCodegen implements CodegenConfig {
         }
 
         return name;
+    }
+
+    private String sanitizeValue(String value, String replaceMatch, String replaceValue, ArrayList<String> exceptionList) {
+        if (exceptionList.size() == 0 || !exceptionList.contains(replaceMatch)) {
+            return value.replaceAll(replaceMatch, replaceValue);
+        }
+        return value;
     }
 
     /**
@@ -4907,6 +4935,15 @@ public class DefaultCodegen implements CodegenConfig {
                 codegenParameter.dataType = codegenProperty.dataType;
                 codegenParameter.description = codegenProperty.description;
                 codegenParameter.paramName = toParamName(codegenParameter.baseName);
+                codegenParameter.minimum = codegenProperty.minimum;
+                codegenParameter.maximum = codegenProperty.maximum;
+                codegenParameter.exclusiveMinimum = codegenProperty.exclusiveMinimum;
+                codegenParameter.exclusiveMaximum = codegenProperty.exclusiveMaximum;
+                codegenParameter.minLength = codegenProperty.minLength;
+                codegenParameter.maxLength = codegenProperty.maxLength;
+                codegenParameter.pattern = codegenProperty.pattern;
+
+
 
                 if (codegenProperty.complexType != null) {
                     imports.add(codegenProperty.complexType);
@@ -4942,7 +4979,7 @@ public class DefaultCodegen implements CodegenConfig {
     }
 
     protected void removeOption(String key) {
-        for(int i = 0; i < cliOptions.size(); i++) {
+        for (int i = 0; i < cliOptions.size(); i++) {
             if (key.equals(cliOptions.get(i).getOpt())) {
                 cliOptions.remove(i);
                 break;
