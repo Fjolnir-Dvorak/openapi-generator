@@ -9,6 +9,7 @@ import org.threeten.bp.LocalDate;
 import org.threeten.bp.OffsetDateTime;
 import org.openapitools.client.model.OuterComposite;
 import org.openapitools.client.model.User;
+import org.openapitools.client.model.XmlItem;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -27,6 +28,20 @@ public class FakeApiTest {
     @Before
     public void setup() {
         api = new ApiClient().buildClient(FakeApi.class);
+    }
+
+    
+    /**
+     * creates an XmlItem
+     *
+     * this route creates an XmlItem
+     */
+    @Test
+    public void createXmlItemTest() {
+        XmlItem xmlItem = null;
+        // api.createXmlItem(xmlItem);
+
+        // TODO: test validations
     }
 
     
